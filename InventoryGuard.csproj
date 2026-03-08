@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net461</TargetFramework>
+    <AssemblyName>InventoryGuard</AssemblyName>
+    <Version>1.1.0</Version>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp"><HintPath>libs\Assembly-CSharp.dll</HintPath></Reference>
+    <Reference Include="Rocket.API"><HintPath>libs\Rocket.API.dll</HintPath></Reference>
+    <Reference Include="Rocket.Core"><HintPath>libs\Rocket.Core.dll</HintPath></Reference>
+    <Reference Include="Rocket.Unturned"><HintPath>libs\Rocket.Unturned.dll</HintPath></Reference>
+    <Reference Include="UnityEngine"><HintPath>libs\UnityEngine.dll</HintPath></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>libs\UnityEngine.CoreModule.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>
