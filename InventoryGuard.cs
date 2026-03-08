@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Rocket.API;
-using Rocket.API.Collections;
 using Rocket.Core.Plugins;
 using Rocket.Unturned;
 using Rocket.Unturned.Player;
+using Rocket.Unturned.Events;
 using SDG.Unturned;
 using UnityEngine;
 
@@ -19,11 +19,13 @@ namespace InventoryGuard
     public class InventoryGuardConfiguration : IRocketPluginConfiguration
     {
         public List<RestrictedItem> RestrictedItems;
-        public void Defaults()
+
+        // Исправлено: теперь LoadDefaults вместо Defaults
+        public void LoadDefaults()
         {
-            RestrictedItems = new List<RestrictedItem> { 
-                new RestrictedItem { ItemId = 17, MaxAmount = 2 },
-                new RestrictedItem { ItemId = 132, MaxAmount = 1 }
+            RestrictedItems = new List<RestrictedItem> 
+            { 
+                new RestrictedItem { ItemId = 17, MaxAmount = 2 } 
             };
         }
     }
@@ -33,7 +35,7 @@ namespace InventoryGuard
         protected override void Load()
         {
             UnturnedPlayerEvents.OnInventoryUpdated += OnInventoryUpdated;
-            Rocket.Core.Logging.Logger.Log("InventoryGuard для Iron & Mud загружен!");
+            Rocket.Core.Logging.Logger.Log("InventoryGuard (LDM) успешно запущен!");
         }
 
         protected override void Unload()
@@ -41,12 +43,15 @@ namespace InventoryGuard
             UnturnedPlayerEvents.OnInventoryUpdated -= OnInventoryUpdated;
         }
 
-        private void OnInventoryUpdated(UnturnedPlayer player, InventoryGroup group, byte index, ItemJar jar)
+        // Исправлено: заменили InventoryGroup на byte для совместимости
+        private void OnInventoryUpdated(UnturnedPlayer player, byte group, byte index, ItemJar jar)
         {
             if (player.IsAdmin || player.HasPermission("inventoryguard.ignore.*")) return;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
+                if (jar.item.id != restriction.ItemId) continue;
+
                 int effectiveLimit = restriction.MaxAmount;
                 
                 foreach (var permission in player.Permissions)
@@ -66,13 +71,18 @@ namespace InventoryGuard
                 int count = 0;
                 for (byte page = 0; page < PlayerInventory.PAGES - 2; page++)
                 {
-                    count += player.Inventory.items[page].items.FindAll(x => x.item.id == restriction.ItemId).Count;
+                    var items = player.Inventory.items[page];
+                    for (byte i = 0; i < items.items.Count; i++)
+                    {
+                        if (items.items[i].item.id == restriction.ItemId) count++;
+                    }
                 }
 
-                if (count > effectiveLimit && jar.item.id == restriction.ItemId)
+                if (count > effectiveLimit)
                 {
-                    player.Inventory.askDropItem(player.CSteamID, (byte)group, jar.x, jar.y);
-                    UnturnedChat.Say(player, $"[Лимит] Предмет {restriction.ItemId} сброшен под ноги! Лимит: {effectiveLimit}", Color.yellow);
+                    player.Inventory.askDropItem(player.CSteamID, group, jar.x, jar.y);
+                    // Используем стандартный метод чата для LDM
+                    Rocket.Unturned.Chat.UnturnedChat.Say(player, $"[Лимит] Предмет {restriction.ItemId} сброшен! Лимит: {effectiveLimit}", Color.yellow);
                 }
             }
         }
