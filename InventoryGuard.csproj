@@ -7,13 +7,15 @@
     <Nullable>disable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Reference Include="Assembly-CSharp"><HintPath>libs\Assembly-CSharp.dll</HintPath></Reference>
-    <Reference Include="Rocket.API"><HintPath>libs\Rocket.API.dll</HintPath></Reference>
-    <Reference Include="Rocket.Core"><HintPath>libs\Rocket.Core.dll</HintPath></Reference>
-    <Reference Include="Rocket.Unturned"><HintPath>libs\Rocket.Unturned.dll</HintPath></Reference>
-    <Reference Include="UnityEngine"><HintPath>libs\UnityEngine.dll</HintPath></Reference>
-    <Reference Include="UnityEngine.CoreModule"><HintPath>libs\UnityEngine.CoreModule.dll</HintPath></Reference>
-    <Reference Include="com.rlabrecque.steamworks.net"><HintPath>libs\com.rlabrecque.steamworks.net.dll</HintPath></Reference>
+ <ItemGroup>
+    <Reference Include="Assembly-CSharp"><HintPath>libs\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Assembly-CSharp-firstpass"><HintPath>libs\Assembly-CSharp-firstpass.dll</HintPath><Private>False</Private></Reference>
+    
+    <Reference Include="Rocket.API"><HintPath>libs\Rocket.API.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Rocket.Core"><HintPath>libs\Rocket.Core.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="Rocket.Unturned"><HintPath>libs\Rocket.Unturned.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>libs\UnityEngine.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>libs\UnityEngine.CoreModule.dll</HintPath><Private>False</Private></Reference>
+    <Reference Include="com.rlabrecque.steamworks.net"><HintPath>libs\com.rlabrecque.steamworks.net.dll</HintPath><Private>False</Private></Reference>
   </ItemGroup>
 </Project>
