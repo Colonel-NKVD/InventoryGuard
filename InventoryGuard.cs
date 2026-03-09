@@ -2,14 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Rocket.API;
-using Rocket.Core;
 using Rocket.Core.Plugins;
 using Rocket.Unturned;
 using Rocket.Unturned.Player;
 using Rocket.Unturned.Chat;
 using SDG.Unturned;
 using UnityEngine;
-using Rocket.Core.Logging;
 
 namespace InventoryGuard
 {
@@ -44,31 +42,39 @@ namespace InventoryGuard
 
         protected override void Load()
         {
-            // Подписываемся через стандартное событие RocketMod
-            RocketUnturnedPlayerEvents.OnPlayerInventoryUpdated += OnInventoryUpdated;
-            
-            Rocket.Core.Logging.Logger.Log("InventoryGuard: Защита активирована!");
+            // Подписываемся на стандартное событие захода игрока
+            U.Events.OnPlayerConnected += OnPlayerConnected;
+            Rocket.Core.Logging.Logger.Log("InventoryGuard: Запущен!");
         }
 
         protected override void Unload()
         {
-            RocketUnturnedPlayerEvents.OnPlayerInventoryUpdated -= OnInventoryUpdated;
+            U.Events.OnPlayerConnected -= OnPlayerConnected;
         }
 
-        private void OnInventoryUpdated(UnturnedPlayer player, InventoryGroup group, byte page, byte index, ItemJar jar)
+        private void OnPlayerConnected(UnturnedPlayer player)
+        {
+            // Самый простой способ: подписываемся на обновление инвентаря игрока
+            // Здесь мы используем "var", чтобы компилятор сам определил типы и не ругался на названия
+            player.Inventory.onInventoryUpdated += (byte page, byte index, ItemJar jar) =>
+            {
+                CheckInventory(player, page, index, jar);
+            };
+        }
+
+        private void CheckInventory(UnturnedPlayer player, byte page, byte index, ItemJar jar)
         {
             if (player == null || jar == null || jar.item == null) return;
 
-            // Тестируем даже на админах, чтобы ты сразу увидел результат
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
                 if (jar.item.id != restriction.ItemId) continue;
 
-                // Если есть спец-право, игнорируем
-                if (R.Permissions.HasPermission(player, "inventoryguard.ignore.*")) continue;
+                // Если игрок админ или имеет иммунитет - пропускаем
+                if (player.IsAdmin || Rocket.Core.R.Permissions.HasPermission(player, "inventoryguard.ignore.*")) continue;
 
                 int count = 0;
-                // Считаем предметы во всех сумках
+                // Считаем все предметы этого типа
                 for (byte p = 0; p < PlayerInventory.PAGES; p++)
                 {
                     var itemsPage = player.Inventory.items[p];
@@ -82,9 +88,9 @@ namespace InventoryGuard
 
                 if (count > restriction.MaxAmount)
                 {
-                    // Важный момент: задержка в полсекунды, чтобы игра успела обработать предмет перед тем как его выкинуть
+                    // Выкидываем предмет
                     player.Inventory.askDropItem(player.CSteamID, page, jar.x, jar.y);
-                    UnturnedChat.Say(player, $"[Guard] Лимит ID {restriction.ItemId} превышен! (Макс: {restriction.MaxAmount})", Color.red);
+                    UnturnedChat.Say(player, $"[Лимит] Нельзя нести больше {restriction.MaxAmount} шт. предмета {restriction.ItemId}!", Color.yellow);
                 }
             }
         }
