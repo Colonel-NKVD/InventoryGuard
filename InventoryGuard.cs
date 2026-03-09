@@ -30,6 +30,7 @@ namespace InventoryGuard
     {
         static InventoryGuard()
         {
+            // Эта часть исправляет ошибку с отсутствующим firstpass
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
                 if (args.Name.Contains("Assembly-CSharp-firstpass"))
@@ -42,9 +43,8 @@ namespace InventoryGuard
 
         protected override void Load()
         {
-            // Подписываемся на стандартное событие захода игрока
             U.Events.OnPlayerConnected += OnPlayerConnected;
-            Rocket.Core.Logging.Logger.Log("InventoryGuard: Запущен!");
+            Rocket.Core.Logging.Logger.Log("InventoryGuard: Запущен и готов к тесту!");
         }
 
         protected override void Unload()
@@ -54,8 +54,7 @@ namespace InventoryGuard
 
         private void OnPlayerConnected(UnturnedPlayer player)
         {
-            // Самый простой способ: подписываемся на обновление инвентаря игрока
-            // Здесь мы используем "var", чтобы компилятор сам определил типы и не ругался на названия
+            // Подписываемся на обновление инвентаря
             player.Inventory.onInventoryUpdated += (byte page, byte index, ItemJar jar) =>
             {
                 CheckInventory(player, page, index, jar);
@@ -70,11 +69,12 @@ namespace InventoryGuard
             {
                 if (jar.item.id != restriction.ItemId) continue;
 
-                // Если игрок админ или имеет иммунитет - пропускаем
-                if (player.IsAdmin || Rocket.Core.R.Permissions.HasPermission(player, "inventoryguard.ignore.*")) continue;
+                // ВРЕМЕННО закомментирована проверка на админа для теста
+                // if (player.IsAdmin) return; 
+
+                if (Rocket.Core.R.Permissions.HasPermission(player, "inventoryguard.ignore.*")) continue;
 
                 int count = 0;
-                // Считаем все предметы этого типа
                 for (byte p = 0; p < PlayerInventory.PAGES; p++)
                 {
                     var itemsPage = player.Inventory.items[p];
@@ -88,9 +88,10 @@ namespace InventoryGuard
 
                 if (count > restriction.MaxAmount)
                 {
-                    // Выкидываем предмет
-                    player.Inventory.askDropItem(player.CSteamID, page, jar.x, jar.y);
-                    UnturnedChat.Say(player, $"[Лимит] Нельзя нести больше {restriction.MaxAmount} шт. предмета {restriction.ItemId}!", Color.yellow);
+                    // ИСПОЛЬЗУЕМ НОВЫЙ МЕТОД (вместо askDropItem)
+                    player.Inventory.sendDropItem(page, jar.x, jar.y);
+                    
+                    UnturnedChat.Say(player, $"[Guard] Предмет {restriction.ItemId} превысил лимит ({restriction.MaxAmount} шт.)", Color.yellow);
                 }
             }
         }
