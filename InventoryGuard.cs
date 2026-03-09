@@ -6,8 +6,10 @@ using Rocket.Core.Plugins;
 using Rocket.Unturned;
 using Rocket.Unturned.Player;
 using Rocket.Unturned.Chat;
+using Rocket.Unturned.Events;
 using SDG.Unturned;
 using UnityEngine;
+using Rocket.Core.Logging;
 
 namespace InventoryGuard
 {
@@ -22,10 +24,7 @@ namespace InventoryGuard
         public List<RestrictedItem> RestrictedItems;
         public void LoadDefaults()
         {
-            RestrictedItems = new List<RestrictedItem> 
-            { 
-                new RestrictedItem { ItemId = 17, MaxAmount = 2 } 
-            };
+            RestrictedItems = new List<RestrictedItem> { new RestrictedItem { ItemId = 17, MaxAmount = 2 } };
         }
     }
 
@@ -33,54 +32,47 @@ namespace InventoryGuard
     {
         protected override void Load()
         {
-            ItemManager.onTakeItemRequested += OnTakeItemRequested;
-            Rocket.Core.Logging.Logger.Log("InventoryGuard (LDM) успешно запущен!");
+            // Используем событие RocketMod, оно более предсказуемо
+            UnturnedPlayerEvents.OnPlayerInventoryUpdated += OnInventoryUpdated;
+            Logger.Log("InventoryGuard (LDM) успешно запущен!");
         }
 
         protected override void Unload()
         {
-            ItemManager.onTakeItemRequested -= OnTakeItemRequested;
+            UnturnedPlayerEvents.OnPlayerInventoryUpdated -= OnInventoryUpdated;
         }
 
-        // Исправленная сигнатура: убраны лишние аргументы, мешавшие компиляции
-        private void OnTakeItemRequested(Player player, byte x, byte y, uint instanceID, ref bool shouldAllow)
+        // Внимание: сигнатура изменена на стандартную для Rocket
+        private void OnInventoryUpdated(UnturnedPlayer player, InventoryGroup group, byte index, ItemJar jar)
         {
-            UnturnedPlayer uPlayer = UnturnedPlayer.FromPlayer(player);
-            if (uPlayer == null || uPlayer.IsAdmin) return;
-
-            // Исправлен поиск предмета: в регионах хранятся ItemData, а не InteractableItem
-            var region = ItemManager.regions[x, y];
-            ItemData itemData = region.items.Find(i => i.instanceID == instanceID);
-            
-            if (itemData == null || itemData.item == null) return;
-
-            ushort itemID = itemData.item.id;
+            if (player == null || player.IsAdmin || jar == null) return;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
-                if (itemID != restriction.ItemId) continue;
+                if (jar.item.id != restriction.ItemId) continue;
 
-                if (R.Permissions.HasPermission(uPlayer, "inventoryguard.ignore.*") || 
-                    R.Permissions.HasPermission(uPlayer, $"inventoryguard.ignore.{itemID}")) return;
+                if (R.Permissions.HasPermission(player, "inventoryguard.ignore.*") || 
+                    R.Permissions.HasPermission(player, $"inventoryguard.ignore.{restriction.ItemId}")) continue;
 
                 int effectiveLimit = restriction.MaxAmount;
-
                 int count = 0;
+
+                // Проверяем все сумки игрока
                 for (byte p = 0; p < PlayerInventory.PAGES - 2; p++)
                 {
-                    var itemsPage = player.inventory.items[p];
+                    var itemsPage = player.Inventory.items[p];
                     if (itemsPage == null) continue;
-                    foreach (var jar in itemsPage.items)
+                    foreach (var item in itemsPage.items)
                     {
-                        if (jar.item != null && jar.item.id == itemID) count++;
+                        if (item.item != null && item.item.id == restriction.ItemId) count++;
                     }
                 }
 
-                if (count >= effectiveLimit)
+                if (count > effectiveLimit)
                 {
-                    shouldAllow = false; 
-                    UnturnedChat.Say(uPlayer, $"[Лимит] Вы не можете взять предмет {itemID}. Лимит: {effectiveLimit}", Color.yellow);
-                    return;
+                    // Выбрасываем предмет, если лимит превышен
+                    player.Inventory.askDropItem(player.CSteamID, (byte)group, jar.x, jar.y);
+                    UnturnedChat.Say(player, $"[Лимит] Предмет {restriction.ItemId} превышен! Максимум: {effectiveLimit}", Color.yellow);
                 }
             }
         }
