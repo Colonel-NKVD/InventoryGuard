@@ -33,7 +33,6 @@ namespace InventoryGuard
     {
         protected override void Load()
         {
-            // Используем максимально надежное событие подбора предмета
             ItemManager.onTakeItemRequested += OnTakeItemRequested;
             Rocket.Core.Logging.Logger.Log("InventoryGuard (LDM) успешно запущен!");
         }
@@ -43,28 +42,29 @@ namespace InventoryGuard
             ItemManager.onTakeItemRequested -= OnTakeItemRequested;
         }
 
-        private void OnTakeItemRequested(Player player, byte x, byte y, uint instanceID, byte to_x, byte to_y, byte to_rot, byte to_page, ref bool shouldAllow)
+        // Исправленная сигнатура: убраны лишние аргументы, мешавшие компиляции
+        private void OnTakeItemRequested(Player player, byte x, byte y, uint instanceID, ref bool shouldAllow)
         {
             UnturnedPlayer uPlayer = UnturnedPlayer.FromPlayer(player);
             if (uPlayer == null || uPlayer.IsAdmin) return;
 
-            // Проверка предмета, который игрок пытается поднять
-            InteractableItem interactableItem = ItemManager.regions[x, y].items.Find(i => i.instanceID == instanceID);
-            if (interactableItem == null) return;
+            // Исправлен поиск предмета: в регионах хранятся ItemData, а не InteractableItem
+            var region = ItemManager.regions[x, y];
+            ItemData itemData = region.items.Find(i => i.instanceID == instanceID);
+            
+            if (itemData == null || itemData.item == null) return;
 
-            ushort itemID = interactableItem.asset.id;
+            ushort itemID = itemData.item.id;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
                 if (itemID != restriction.ItemId) continue;
 
-                // Проверка иммунитета
                 if (R.Permissions.HasPermission(uPlayer, "inventoryguard.ignore.*") || 
                     R.Permissions.HasPermission(uPlayer, $"inventoryguard.ignore.{itemID}")) return;
 
                 int effectiveLimit = restriction.MaxAmount;
 
-                // Считаем текущее количество в инвентаре
                 int count = 0;
                 for (byte p = 0; p < PlayerInventory.PAGES - 2; p++)
                 {
@@ -72,13 +72,13 @@ namespace InventoryGuard
                     if (itemsPage == null) continue;
                     foreach (var jar in itemsPage.items)
                     {
-                        if (jar.item.id == itemID) count++;
+                        if (jar.item != null && jar.item.id == itemID) count++;
                     }
                 }
 
                 if (count >= effectiveLimit)
                 {
-                    shouldAllow = false; // ЗАПРЕЩАЕМ ПОДБОР
+                    shouldAllow = false; 
                     UnturnedChat.Say(uPlayer, $"[Лимит] Вы не можете взять предмет {itemID}. Лимит: {effectiveLimit}", Color.yellow);
                     return;
                 }
@@ -86,4 +86,3 @@ namespace InventoryGuard
         }
     }
 }
-
