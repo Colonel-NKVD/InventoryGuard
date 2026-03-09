@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection; // Это нужно добавить для работы Assembly
 using Rocket.API;
 using Rocket.Core;
 using Rocket.Core.Plugins;
@@ -29,6 +30,21 @@ namespace InventoryGuard
 
     public class InventoryGuard : RocketPlugin<InventoryGuardConfiguration>
     {
+        // --- ВСТАВЛЯТЬ СЮДА (НАЧАЛО) ---
+        static InventoryGuard()
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                // Если система ищет несуществующий firstpass, мы говорим ей использовать основной файл игры
+                if (args.Name.Contains("Assembly-CSharp-firstpass"))
+                {
+                    return Assembly.GetAssembly(typeof(ItemJar));
+                }
+                return null;
+            };
+        }
+        // --- ВСТАВЛЯТЬ СЮДА (КОНЕЦ) ---
+
         protected override void Load()
         {
             U.Events.OnPlayerConnected += OnPlayerConnected;
@@ -42,7 +58,6 @@ namespace InventoryGuard
 
         private void OnPlayerConnected(UnturnedPlayer player)
         {
-            // Подписываемся на обновление инвентаря конкретного игрока напрямую
             player.Inventory.onInventoryUpdated += (byte page, byte index, ItemJar jar) => 
             {
                 OnInternalInventoryUpdated(player, page, index, jar);
@@ -51,6 +66,7 @@ namespace InventoryGuard
 
         private void OnInternalInventoryUpdated(UnturnedPlayer player, byte page, byte index, ItemJar jar)
         {
+            // ВАЖНО: Если ты АДМИН, плагин ничего не сделает. Для теста сними админку!
             if (player == null || player.IsAdmin || jar == null || jar.item == null) return;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
