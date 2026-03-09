@@ -32,9 +32,8 @@ namespace InventoryGuard
     {
         protected override void Load()
         {
-            // Используем событие RocketMod, оно более предсказуемо
             UnturnedPlayerEvents.OnPlayerInventoryUpdated += OnInventoryUpdated;
-            Logger.Log("InventoryGuard (LDM) успешно запущен!");
+            Rocket.Core.Logging.Logger.Log("InventoryGuard (LDM) успешно запущен!");
         }
 
         protected override void Unload()
@@ -42,10 +41,10 @@ namespace InventoryGuard
             UnturnedPlayerEvents.OnPlayerInventoryUpdated -= OnInventoryUpdated;
         }
 
-        // Внимание: сигнатура изменена на стандартную для Rocket
-        private void OnInventoryUpdated(UnturnedPlayer player, InventoryGroup group, byte index, ItemJar jar)
+        // Заменили InventoryGroup на byte для максимальной совместимости
+        private void OnInventoryUpdated(UnturnedPlayer player, byte group, byte index, ItemJar jar)
         {
-            if (player == null || player.IsAdmin || jar == null) return;
+            if (player == null || player.IsAdmin || jar == null || jar.item == null) return;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
@@ -57,21 +56,25 @@ namespace InventoryGuard
                 int effectiveLimit = restriction.MaxAmount;
                 int count = 0;
 
-                // Проверяем все сумки игрока
                 for (byte p = 0; p < PlayerInventory.PAGES - 2; p++)
                 {
                     var itemsPage = player.Inventory.items[p];
-                    if (itemsPage == null) continue;
-                    foreach (var item in itemsPage.items)
+                    if (itemsPage == null || itemsPage.items == null) continue;
+                    
+                    for (int i = 0; i < itemsPage.items.Count; i++)
                     {
-                        if (item.item != null && item.item.id == restriction.ItemId) count++;
+                        var itemJar = itemsPage.items[i];
+                        if (itemJar != null && itemJar.item != null && itemJar.item.id == restriction.ItemId)
+                        {
+                            count++;
+                        }
                     }
                 }
 
                 if (count > effectiveLimit)
                 {
-                    // Выбрасываем предмет, если лимит превышен
-                    player.Inventory.askDropItem(player.CSteamID, (byte)group, jar.x, jar.y);
+                    // Используем базовый метод сброса предмета
+                    player.Inventory.askDropItem(player.CSteamID, group, jar.x, jar.y);
                     UnturnedChat.Say(player, $"[Лимит] Предмет {restriction.ItemId} превышен! Максимум: {effectiveLimit}", Color.yellow);
                 }
             }
