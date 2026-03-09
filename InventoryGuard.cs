@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Rocket.API;
+using Rocket.Core;
 using Rocket.Core.Plugins;
 using Rocket.Unturned;
 using Rocket.Unturned.Player;
-using Rocket.Unturned.Events;
 using SDG.Unturned;
 using UnityEngine;
 using Rocket.Core.Logging;
@@ -30,19 +30,23 @@ namespace InventoryGuard
     {
         protected override void Load()
         {
-            // Исправлено: подписка на событие в LDM
-            UnturnedPlayerEvents.OnPlayerInventoryUpdated += OnInventoryUpdated;
-            Logger.Log("InventoryGuard (LDM 2026) загружен!");
+            // Используем прямой доступ к игровым событиям Unturned через Rocket
+            ItemManager.onInventoryUpdated += OnInventoryUpdated;
+            Logger.Log("InventoryGuard (LDM 2026) загружен корректно!");
         }
 
         protected override void Unload()
         {
-            UnturnedPlayerEvents.OnPlayerInventoryUpdated -= OnInventoryUpdated;
+            ItemManager.onInventoryUpdated -= OnInventoryUpdated;
         }
 
-        private void OnInventoryUpdated(UnturnedPlayer player, InventoryGroup group, byte index, ItemJar jar)
+        private void OnInventoryUpdated(PlayerInventory inventory, byte page, byte index, ItemJar jar)
         {
-            if (player == null || player.IsAdmin || player.HasPermission("inventoryguard.ignore.*")) return;
+            UnturnedPlayer player = UnturnedPlayer.FromPlayer(inventory.player);
+            if (player == null || player.IsAdmin) return;
+
+            // Проверка общего иммунитета
+            if (R.Permissions.HasPermission(player, "inventoryguard.ignore.*")) return;
 
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
@@ -50,36 +54,42 @@ namespace InventoryGuard
 
                 int effectiveLimit = restriction.MaxAmount;
                 
-                // Исправлено получение разрешений
-                var permissions = player.GetPermissions();
-                foreach (var permission in permissions)
+                // Проверка персональных лимитов через систему разрешений Rocket
+                if (R.Permissions.HasPermission(player, $"inventoryguard.ignore.{restriction.ItemId}")) continue;
+
+                // Поиск кастомного лимита в разрешениях
+                var pGroup = R.Permissions.GetGroups(player, false);
+                foreach (var group in pGroup)
                 {
-                    string prefix = $"limit.{restriction.ItemId}.";
-                    if (permission.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    foreach (var perm in group.Permissions)
                     {
-                        if (int.TryParse(permission.Name.Substring(prefix.Length), out int customLimit))
+                        string prefix = $"limit.{restriction.ItemId}.";
+                        if (perm.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                         {
-                            effectiveLimit = customLimit;
+                            if (int.TryParse(perm.Name.Substring(prefix.Length), out int customLimit))
+                            {
+                                effectiveLimit = Math.Max(effectiveLimit, customLimit);
+                            }
                         }
                     }
                 }
 
-                if (player.HasPermission($"inventoryguard.ignore.{restriction.ItemId}")) continue;
-
                 int count = 0;
-                for (byte page = 0; page < PlayerInventory.PAGES - 2; page++)
+                for (byte p = 0; p < PlayerInventory.PAGES - 2; p++)
                 {
-                    var items = player.Inventory.items[page];
-                    for (byte i = 0; i < items.items.Count; i++)
+                    var itemsPage = inventory.items[p];
+                    if (itemsPage == null) continue;
+                    
+                    for (int i = 0; i < itemsPage.items.Count; i++)
                     {
-                        if (items.items[i].item.id == restriction.ItemId) count++;
+                        if (itemsPage.items[i].item.id == restriction.ItemId) count++;
                     }
                 }
 
                 if (count > effectiveLimit)
                 {
-                    player.Inventory.askDropItem(player.CSteamID, (byte)group, jar.x, jar.y);
-                    Rocket.Unturned.Chat.UnturnedChat.Say(player, $"[Лимит] Предмет {restriction.ItemId} превышен ({effectiveLimit}) и сброшен!", Color.yellow);
+                    inventory.askDropItem(player.CSteamID, page, jar.x, jar.y);
+                    Rocket.Unturned.Chat.UnturnedChat.Say(player, $"[Лимит] {restriction.ItemId} сброшен! Лимит: {effectiveLimit}", Color.yellow);
                 }
             }
         }
