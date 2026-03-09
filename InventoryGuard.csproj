@@ -9,7 +9,6 @@
 
  <ItemGroup>
     <Reference Include="Assembly-CSharp"><HintPath>libs\Assembly-CSharp.dll</HintPath><Private>False</Private></Reference>
-    <Reference Include="Assembly-CSharp-firstpass"><HintPath>libs\Assembly-CSharp-firstpass.dll</HintPath><Private>False</Private></Reference>
     
     <Reference Include="Rocket.API"><HintPath>libs\Rocket.API.dll</HintPath><Private>False</Private></Reference>
     <Reference Include="Rocket.Core"><HintPath>libs\Rocket.Core.dll</HintPath><Private>False</Private></Reference>
