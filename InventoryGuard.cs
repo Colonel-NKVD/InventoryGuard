@@ -39,7 +39,7 @@ namespace InventoryGuard
 
         protected override void Load()
         {
-            Rocket.Core.Logging.Logger.Log("InventoryGuard: Режим ВЫБРОСА предметов активен.");
+            Rocket.Core.Logging.Logger.Log("InventoryGuard: Режим ВЫБРОСА предметов активен. Сканирование ящиков отключено.");
         }
 
         void FixedUpdate()
@@ -61,8 +61,10 @@ namespace InventoryGuard
             foreach (var restriction in Configuration.Instance.RestrictedItems)
             {
                 int count = 0;
-                // Проходим по всем страницам инвентаря
-                for (byte p = 0; p < PlayerInventory.PAGES; p++)
+                
+                // ИЗМЕНЕНИЕ ЗДЕСЬ: 
+                // Проходим только по личным вещам игрока, останавливаясь перед открытыми ящиками (STORAGE)
+                for (byte p = 0; p < PlayerInventory.STORAGE; p++)
                 {
                     var pageItems = player.Inventory.items[p];
                     if (pageItems == null) continue;
