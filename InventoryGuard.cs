@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
 using Rocket.API;
 using Rocket.Core.Plugins;
-using Rocket.Unturned;
-using Rocket.Unturned.Player;
 using Rocket.Unturned.Chat;
 using SDG.Unturned;
 using UnityEngine;
@@ -25,7 +22,14 @@ namespace InventoryGuard
 
     public class InventoryGuard : RocketPlugin<InventoryGuardConfiguration>
     {
-        private DateTime lastCheck = DateTime.Now;
+        // Кэш конфига для поиска за O(1)
+        private Dictionary<ushort, int> limitsCache;
+        
+        // Глобальный переиспользуемый словарь (Zero Allocation)
+        private Dictionary<ushort, int> tempCounts;
+
+        // Индекс для амортизации нагрузки
+        private int playerCheckIndex = 0;
 
         static InventoryGuard()
         {
@@ -39,56 +43,75 @@ namespace InventoryGuard
 
         protected override void Load()
         {
-            Rocket.Core.Logging.Logger.Log("InventoryGuard: Режим ВЫБРОСА предметов активен. Сканирование ящиков отключено.");
+            // 1. Инициализируем кэш лимитов при загрузке
+            limitsCache = new Dictionary<ushort, int>();
+            foreach (var item in Configuration.Instance.RestrictedItems)
+            {
+                limitsCache[item.ItemId] = item.MaxAmount;
+            }
+
+            // 2. Создаем словарь для подсчета один раз
+            tempCounts = new Dictionary<ushort, int>();
+
+            Rocket.Core.Logging.Logger.Log("InventoryGuard: Режим максимальной оптимизации (Frame Slicing) активен.");
         }
 
         void FixedUpdate()
         {
-            // Проверка каждые 2 секунды
-            if ((DateTime.Now - lastCheck).TotalSeconds < 2) return;
-            lastCheck = DateTime.Now;
+            int playerCount = Provider.clients.Count;
+            if (playerCount == 0) return;
 
-            foreach (var steamPlayer in Provider.clients)
+            // Сдвигаем индекс. Проверяем строго 1 игрока за 1 физический тик (50 раз в секунду).
+            playerCheckIndex++;
+            if (playerCheckIndex >= playerCount) 
             {
-                UnturnedPlayer player = UnturnedPlayer.FromSteamPlayer(steamPlayer);
-                if (player == null || player.IsAdmin) continue;
-                ExecuteGuard(player);
+                playerCheckIndex = 0; // Сброс, если дошли до конца списка или кто-то вышел
             }
+
+            SteamPlayer client = Provider.clients[playerCheckIndex];
+            Player player = client?.player;
+
+            if (player == null || player.look.isAdmin) return;
+
+            ExecuteGuard(player, client);
         }
 
-        private void ExecuteGuard(UnturnedPlayer player)
+        private void ExecuteGuard(Player player, SteamPlayer client)
         {
-            foreach (var restriction in Configuration.Instance.RestrictedItems)
+            // Очищаем глобальный словарь вместо создания нового (спасает Garbage Collector от лишней работы)
+            tempCounts.Clear();
+
+            // Проходим только по личным вещам игрока, игнорируя ящики (p < PlayerInventory.STORAGE)
+            for (byte p = 0; p < PlayerInventory.STORAGE; p++)
             {
-                int count = 0;
-                
-                // ИЗМЕНЕНИЕ ЗДЕСЬ: 
-                // Проходим только по личным вещам игрока, останавливаясь перед открытыми ящиками (STORAGE)
-                for (byte p = 0; p < PlayerInventory.STORAGE; p++)
+                var page = player.inventory.items[p];
+                if (page == null) continue;
+
+                // Идем с конца, чтобы безопасно удалять предметы
+                for (int i = page.getItemCount() - 1; i >= 0; i--)
                 {
-                    var pageItems = player.Inventory.items[p];
-                    if (pageItems == null) continue;
+                    var jar = page.getItem((byte)i);
+                    ushort id = jar.item.id;
 
-                    // Идем с конца списка, чтобы не сбить индексы при удалении
-                    for (int i = pageItems.getItemCount() - 1; i >= 0; i--)
+                    // Если предмет числится в кэше лимитов
+                    if (limitsCache.TryGetValue(id, out int maxAmount))
                     {
-                        var jar = pageItems.getItem((byte)i);
-                        if (jar?.item?.id == restriction.ItemId)
-                        {
-                            count++;
-                            
-                            // Если лимит превышен
-                            if (count > restriction.MaxAmount)
-                            {
-                                // 1. Выбрасываем ПЕРЕД игроком на землю
-                                ItemManager.dropItem(jar.item, player.Position, false, true, true);
-                                
-                                // 2. Удаляем из инвентаря
-                                player.Inventory.removeItem(p, (byte)i);
+                        // Считаем количество в инвентаре
+                        tempCounts.TryGetValue(id, out int currentCount);
+                        currentCount++;
+                        tempCounts[id] = currentCount;
 
-                                UnturnedChat.Say(player, $"[Guard] Лимит ID {restriction.ItemId} превышен! Лишнее выпало на землю.", Color.yellow);
-                                Rocket.Core.Logging.Logger.Log($"[Guard] Предмет {restriction.ItemId} выброшен у {player.CharacterName}");
-                            }
+                        if (currentCount > maxAmount)
+                        {
+                            // 1. Выбрасываем ПЕРЕД игроком на землю
+                            ItemManager.dropItem(jar.item, player.transform.position, false, true, true);
+                            
+                            // 2. Удаляем из инвентаря
+                            player.inventory.removeItem(p, (byte)i);
+
+                            // Отправляем сообщение конкретному игроку через его SteamID
+                            UnturnedChat.Say(client.playerID.steamID, $"[Guard] Лимит ID {id} превышен! Лишнее выпало на землю.", Color.yellow);
+                            Rocket.Core.Logging.Logger.Log($"[Guard] Предмет {id} выброшен у {player.channel.owner.playerID.characterName}");
                         }
                     }
                 }
