@@ -55,7 +55,7 @@ namespace InventoryGuard
 
             Rocket.Core.Logging.Logger.Log("InventoryGuard: Режим максимальной оптимизации (Frame Slicing) активен.");
         }
-
+        
         void FixedUpdate()
         {
             int playerCount = Provider.clients.Count;
@@ -71,7 +71,7 @@ namespace InventoryGuard
             SteamPlayer client = Provider.clients[playerCheckIndex];
             Player player = client?.player;
 
-            if (player == null || player.look.isAdmin) return;
+            if (player == null || player.isAdmin) return;
 
             ExecuteGuard(player, client);
         }
