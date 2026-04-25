@@ -71,7 +71,8 @@ namespace InventoryGuard
             SteamPlayer client = Provider.clients[playerCheckIndex];
             Player player = client?.player;
 
-            if (player == null || player.IsAdmin) return;
+            // ИСПРАВЛЕНИЕ: Используем правильный путь к статусу администратора
+            if (player == null || player.channel.owner.isAdmin) return;
 
             ExecuteGuard(player, client);
         }
