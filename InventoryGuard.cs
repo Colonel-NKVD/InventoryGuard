@@ -71,7 +71,7 @@ namespace InventoryGuard
             SteamPlayer client = Provider.clients[playerCheckIndex];
             Player player = client?.player;
 
-            if (player == null || player.isAdmin) return;
+            if (player == null || player.IsAdmin) return;
 
             ExecuteGuard(player, client);
         }
